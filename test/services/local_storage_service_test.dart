@@ -1,7 +1,7 @@
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_trichter/models/chug_record.dart';
-import 'package:smart_trichter/services/firestore_service.dart';
+import 'package:smart_trichter/services/local_storage_service.dart';
 
 ChugRecord _record({
   String funnelId = 'funnel-1',
@@ -20,14 +20,15 @@ ChugRecord _record({
     );
 
 void main() {
-  group('FirestoreService', () {
-    late FakeFirebaseFirestore fakeFirestore;
-    late FirestoreService service;
+  group('LocalStorageService', () {
+    late LocalStorageService service;
 
-    setUp(() {
-      fakeFirestore = FakeFirebaseFirestore();
-      service = FirestoreService(db: fakeFirestore);
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      service = await LocalStorageService.create();
     });
+
+    tearDown(() => service.dispose());
 
     test('saveChug then watchLeaderboard returns the saved record', () async {
       final record = _record(durationMs: 4200);
@@ -94,6 +95,15 @@ void main() {
 
       expect(results, hasLength(1));
       expect(results.first.liquid, 'Wine');
+    });
+
+    test('saved record gets an id assigned', () async {
+      await service.saveChug(_record());
+
+      final results = await service.watchLeaderboard(funnelId: 'funnel-1').first;
+
+      expect(results.first.id, isNotNull);
+      expect(results.first.id, isNotEmpty);
     });
   });
 }

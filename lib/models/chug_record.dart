@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class ChugRecord {
   final String? id;
   final String funnelId;
@@ -19,25 +17,33 @@ class ChugRecord {
     required this.loggedAt,
   });
 
-  factory ChugRecord.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data()! as Map<String, dynamic>;
-    return ChugRecord(
-      id: doc.id,
-      funnelId: data['funnelId'] as String,
-      name: data['name'] as String,
-      liquid: data['liquid'] as String,
-      quantityMl: data['quantityMl'] as int,
-      durationMs: data['durationMs'] as int,
-      loggedAt: (data['loggedAt'] as Timestamp).toDate(),
-    );
-  }
+  factory ChugRecord.fromJson(Map<String, dynamic> json) => ChugRecord(
+        id: json['id'] as String?,
+        funnelId: json['funnelId'] as String,
+        name: json['name'] as String,
+        liquid: json['liquid'] as String,
+        quantityMl: json['quantityMl'] as int,
+        durationMs: json['durationMs'] as int,
+        loggedAt: DateTime.parse(json['loggedAt'] as String),
+      );
 
-  Map<String, dynamic> toFirestore() => {
+  Map<String, dynamic> toJson() => {
+        'id': id,
         'funnelId': funnelId,
         'name': name,
         'liquid': liquid,
         'quantityMl': quantityMl,
         'durationMs': durationMs,
-        'loggedAt': FieldValue.serverTimestamp(),
+        'loggedAt': loggedAt.toIso8601String(),
       };
+
+  ChugRecord copyWith({String? id}) => ChugRecord(
+        id: id ?? this.id,
+        funnelId: funnelId,
+        name: name,
+        liquid: liquid,
+        quantityMl: quantityMl,
+        durationMs: durationMs,
+        loggedAt: loggedAt,
+      );
 }

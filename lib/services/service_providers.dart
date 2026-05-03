@@ -1,4 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'firestore_service.dart';
 
-final firestoreServiceProvider = Provider((_) => FirestoreService());
+import 'local_storage_service.dart';
+
+final localStorageServiceProvider = FutureProvider(
+  (_) => LocalStorageService.create(),
+);

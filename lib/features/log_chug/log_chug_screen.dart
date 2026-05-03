@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/chug_record.dart';
 import '../../models/liquid_option.dart';
-import '../../services/service_providers.dart';
+import '../../services/service_providers.dart' show localStorageServiceProvider;
 import '../../utils/duration_format.dart';
 import '../ble/ble_providers.dart';
 
@@ -45,7 +45,8 @@ class _LogChugSheetState extends ConsumerState<LogChugSheet> {
     );
 
     try {
-      await ref.read(firestoreServiceProvider).saveChug(record);
+      final service = await ref.read(localStorageServiceProvider.future);
+      await service.saveChug(record);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {

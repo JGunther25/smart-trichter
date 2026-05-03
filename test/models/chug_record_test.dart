@@ -1,19 +1,11 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_trichter/models/chug_record.dart';
 
 void main() {
   group('ChugRecord', () {
-    late FakeFirebaseFirestore fakeFirestore;
-
-    setUp(() {
-      fakeFirestore = FakeFirebaseFirestore();
-    });
-
-    test('round-trip: all fields survive toFirestore -> fromFirestore',
-        () async {
+    test('round-trip: all fields survive toJson -> fromJson', () {
       final original = ChugRecord(
+        id: 'abc-123',
         funnelId: 'funnel-42',
         name: 'Alice',
         liquid: 'Beer',
@@ -22,20 +14,18 @@ void main() {
         loggedAt: DateTime(2024, 6, 1, 12, 0, 0),
       );
 
-      final ref =
-          await fakeFirestore.collection('chugs').add(original.toFirestore());
-      final doc = await ref.get();
-      final restored = ChugRecord.fromFirestore(doc);
+      final restored = ChugRecord.fromJson(original.toJson());
 
-      expect(restored.id, ref.id);
+      expect(restored.id, original.id);
       expect(restored.funnelId, original.funnelId);
       expect(restored.name, original.name);
       expect(restored.liquid, original.liquid);
       expect(restored.quantityMl, original.quantityMl);
       expect(restored.durationMs, original.durationMs);
+      expect(restored.loggedAt, original.loggedAt);
     });
 
-    test('durationMs survives round-trip as int', () async {
+    test('durationMs survives round-trip as int', () {
       const durationMs = 12345;
       final record = ChugRecord(
         funnelId: 'f1',
@@ -46,10 +36,7 @@ void main() {
         loggedAt: DateTime.now(),
       );
 
-      final ref =
-          await fakeFirestore.collection('chugs').add(record.toFirestore());
-      final doc = await ref.get();
-      final restored = ChugRecord.fromFirestore(doc);
+      final restored = ChugRecord.fromJson(record.toJson());
 
       expect(restored.durationMs, isA<int>());
       expect(restored.durationMs, durationMs);
@@ -67,7 +54,7 @@ void main() {
       expect(record.id, isNull);
     });
 
-    test('toFirestore uses FieldValue.serverTimestamp for loggedAt', () {
+    test('copyWith assigns a new id', () {
       final record = ChugRecord(
         funnelId: 'f1',
         name: 'Dave',
@@ -76,8 +63,11 @@ void main() {
         durationMs: 4000,
         loggedAt: DateTime.now(),
       );
-      final map = record.toFirestore();
-      expect(map['loggedAt'], isA<FieldValue>());
+      final withId = record.copyWith(id: 'new-id');
+
+      expect(withId.id, 'new-id');
+      expect(withId.funnelId, record.funnelId);
+      expect(withId.durationMs, record.durationMs);
     });
   });
 }
