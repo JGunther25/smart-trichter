@@ -12,7 +12,7 @@ final appTheme = ThemeData(
     elevation: 0,
     scrolledUnderElevation: 2,
   ),
-  cardTheme: const CardTheme(
+  cardTheme: const CardThemeData(
     elevation: 1,
     margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
   ),
