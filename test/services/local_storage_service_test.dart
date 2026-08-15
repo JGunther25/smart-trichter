@@ -9,6 +9,7 @@ ChugRecord _record({
   int quantityMl = 500,
   int durationMs = 3000,
   String name = 'Alice',
+  DateTime? loggedAt,
 }) =>
     ChugRecord(
       funnelId: funnelId,
@@ -16,7 +17,7 @@ ChugRecord _record({
       liquid: liquid,
       quantityMl: quantityMl,
       durationMs: durationMs,
-      loggedAt: DateTime.now(),
+      loggedAt: loggedAt ?? DateTime.now(),
     );
 
 void main() {
@@ -100,10 +101,49 @@ void main() {
     test('saved record gets an id assigned', () async {
       await service.saveChug(_record());
 
-      final results = await service.watchLeaderboard(funnelId: 'funnel-1').first;
+      final results =
+          await service.watchLeaderboard(funnelId: 'funnel-1').first;
 
       expect(results.first.id, isNotNull);
       expect(results.first.id, isNotEmpty);
+    });
+
+    test('watchHistory orders by loggedAt descending', () async {
+      final now = DateTime.now();
+      await service.saveChug(_record(
+          name: 'A', loggedAt: now.subtract(const Duration(minutes: 2))));
+      await service.saveChug(_record(name: 'B', loggedAt: now));
+      await service.saveChug(_record(
+          name: 'C', loggedAt: now.subtract(const Duration(minutes: 1))));
+
+      final results = await service.watchHistory(funnelId: 'funnel-1').first;
+
+      expect(results.map((r) => r.name).toList(), ['B', 'C', 'A']);
+    });
+
+    test('watchHistory date filter returns only records on that day', () async {
+      final today = DateTime.now();
+      final yesterday = today.subtract(const Duration(days: 1));
+      await service.saveChug(_record(name: 'Today', loggedAt: today));
+      await service.saveChug(_record(name: 'Yesterday', loggedAt: yesterday));
+
+      final results =
+          await service.watchHistory(funnelId: 'funnel-1', date: today).first;
+
+      expect(results, hasLength(1));
+      expect(results.first.name, 'Today');
+    });
+
+    test('watchHistory liquid filter works', () async {
+      await service.saveChug(_record(liquid: 'Beer'));
+      await service.saveChug(_record(liquid: 'Wine'));
+
+      final results = await service
+          .watchHistory(funnelId: 'funnel-1', liquid: 'Wine')
+          .first;
+
+      expect(results, hasLength(1));
+      expect(results.first.liquid, 'Wine');
     });
   });
 }

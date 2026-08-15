@@ -47,7 +47,8 @@ class LocalStorageService {
     String? liquid,
     int? quantityMl,
   }) =>
-      _filteredStream(funnelId: funnelId, liquid: liquid, quantityMl: quantityMl);
+      _filteredStream(
+          funnelId: funnelId, liquid: liquid, quantityMl: quantityMl);
 
   Stream<List<ChugRecord>> watchAllLeaderboard({
     String? liquid,
@@ -55,10 +56,26 @@ class LocalStorageService {
   }) =>
       _filteredStream(liquid: liquid, quantityMl: quantityMl);
 
+  /// Chronological history (most recent first), optionally filtered by
+  /// funnel, liquid, and calendar day (compared in local time).
+  Stream<List<ChugRecord>> watchHistory({
+    String? funnelId,
+    String? liquid,
+    DateTime? date,
+  }) =>
+      _filteredStream(
+        funnelId: funnelId,
+        liquid: liquid,
+        date: date,
+        sortByDuration: false,
+      );
+
   Stream<List<ChugRecord>> _filteredStream({
     String? funnelId,
     String? liquid,
     int? quantityMl,
+    DateTime? date,
+    bool sortByDuration = true,
   }) {
     List<ChugRecord> filter(List<ChugRecord> all) {
       var result = all;
@@ -71,16 +88,27 @@ class LocalStorageService {
       if (quantityMl != null) {
         result = result.where((r) => r.quantityMl == quantityMl).toList();
       }
-      result.sort((a, b) => a.durationMs.compareTo(b.durationMs));
+      if (date != null) {
+        result = result.where((r) {
+          final local = r.loggedAt.toLocal();
+          return local.year == date.year &&
+              local.month == date.month &&
+              local.day == date.day;
+        }).toList();
+      }
+      result = List.of(result);
+      if (sortByDuration) {
+        result.sort((a, b) => a.durationMs.compareTo(b.durationMs));
+      } else {
+        result.sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
+      }
       return result;
     }
 
     // Emit current state immediately, then re-emit on every save.
     final initial = Stream.value(_loadAll());
     final updates = _controller.stream;
-    return initial
-        .asyncExpand((first) => updates.startWith(first))
-        .map(filter);
+    return initial.asyncExpand((first) => updates.startWith(first)).map(filter);
   }
 
   void dispose() => _controller.close();

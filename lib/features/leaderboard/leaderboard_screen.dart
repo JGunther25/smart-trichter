@@ -30,6 +30,11 @@ class LeaderboardScreen extends ConsumerWidget {
         title: Text(connectedId ?? 'Smart Funnel'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'History',
+            onPressed: () => context.push('/history'),
+          ),
+          IconButton(
             icon: const Icon(Icons.bluetooth),
             tooltip: 'Connect funnel',
             onPressed: () => context.go('/connect'),
