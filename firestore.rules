@@ -17,5 +17,14 @@ service cloud.firestore {
       // client config — an intentional tradeoff for a hobby/party app.
       allow delete: if true;
     }
+    // Records every funnel this app has connected to (BLE device address ->
+    // BLE-advertised name), so a funnel's leaderboard can be found by name
+    // and browsed without an active BLE connection.
+    match /funnels/{funnelId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasAll(['name'])
+        && request.resource.data.name is string;
+      allow delete: if true;
+    }
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/chug_record.dart';
 import '../../services/service_providers.dart';
+import '../leaderboard/leaderboard_providers.dart';
 import 'ble_providers.dart';
 import 'ble_service.dart';
 import 'legacy_import_service.dart';
@@ -104,7 +105,19 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   Future<void> _connect(BluetoothDevice device) async {
     setState(() => _isConnecting = true);
     try {
-      await ref.read(bleServiceProvider).connect(device);
+      final bleService = ref.read(bleServiceProvider);
+      await bleService.connect(device);
+      ref.read(browsingFunnelProvider.notifier).state = null;
+
+      final id = bleService.connectedDeviceId;
+      final name = bleService.connectedDeviceName;
+      if (id != null && name != null) {
+        // Best-effort — a failure here shouldn't block using the funnel.
+        unawaited(
+          ref.read(firestoreServiceProvider).saveFunnelName(id, name),
+        );
+      }
+
       if (mounted) context.go('/leaderboard');
     } catch (e) {
       if (mounted) {
@@ -140,6 +153,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                     )
                   : const Icon(Icons.bluetooth_searching),
               label: Text(_isScanning ? 'Scanning…' : 'Scan'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => context.go('/funnels'),
+              icon: const Icon(Icons.leaderboard),
+              label: const Text('Browse a funnel\'s leaderboard'),
             ),
             const SizedBox(height: 16),
             Expanded(

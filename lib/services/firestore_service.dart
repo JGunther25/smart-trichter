@@ -1,12 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/chug_record.dart';
+import '../models/known_funnel.dart';
 
 class FirestoreService {
   final CollectionReference<Map<String, dynamic>> _chugs;
+  final CollectionReference<Map<String, dynamic>> _funnels;
 
-  FirestoreService({FirebaseFirestore? db})
-      : _chugs = (db ?? _defaultDb()).collection('chugs');
+  FirestoreService({FirebaseFirestore? db}) : this._(db ?? _defaultDb());
+
+  FirestoreService._(FirebaseFirestore db)
+      : _chugs = db.collection('chugs'),
+        _funnels = db.collection('funnels');
 
   static FirebaseFirestore _defaultDb() {
     final db = FirebaseFirestore.instance;
@@ -22,6 +27,24 @@ class FirestoreService {
       _chugs.doc(record.id!).update(record.toFirestore(preserveLoggedAt: true));
 
   Future<void> deleteChug(String id) => _chugs.doc(id).delete();
+
+  /// Records that this funnel (BLE device address [funnelId]) has been
+  /// connected to, with its BLE-advertised [name] — called on every
+  /// successful connect so the funnel can later be found by name and its
+  /// leaderboard browsed without an active BLE connection.
+  Future<void> saveFunnelName(String funnelId, String name) =>
+      _funnels.doc(funnelId).set({'name': name}, SetOptions(merge: true));
+
+  /// All funnels ever connected to, sorted by name.
+  Stream<List<KnownFunnel>> watchKnownFunnels() {
+    return _funnels.snapshots().map((snapshot) {
+      final funnels = snapshot.docs.map(KnownFunnel.fromFirestore).toList();
+      funnels.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+      return funnels;
+    });
+  }
 
   /// Writes many records in one atomic batch. Used by the legacy local-data
   /// import — [preserveLoggedAt] keeps each record's original timestamp
