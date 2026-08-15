@@ -3,14 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/chug_record.dart';
 import '../../models/liquid_option.dart';
-import '../../services/service_providers.dart' show localStorageServiceProvider;
+import '../../services/service_providers.dart' show firestoreServiceProvider;
 import '../../utils/duration_format.dart';
 import '../ble/ble_providers.dart';
 
 class LogChugSheet extends ConsumerStatefulWidget {
   final int durationMs;
+  final ChugRecord? existing;
 
-  const LogChugSheet({required this.durationMs, super.key});
+  const LogChugSheet({required this.durationMs, this.existing, super.key});
+
+  bool get isEditing => existing != null;
 
   @override
   ConsumerState<LogChugSheet> createState() => _LogChugSheetState();
@@ -18,15 +21,21 @@ class LogChugSheet extends ConsumerStatefulWidget {
 
 class _LogChugSheetState extends ConsumerState<LogChugSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  late final _nameController = TextEditingController(
+    text: widget.existing?.name ?? '',
+  );
+  late final _durationController = TextEditingController(
+    text: (widget.existing?.durationMs ?? widget.durationMs).toString(),
+  );
 
-  String _liquid = liquidOptions.first;
-  int _quantityMl = 330;
+  late String _liquid = widget.existing?.liquid ?? liquidOptions.first;
+  late int _quantityMl = widget.existing?.quantityMl ?? 330;
   bool _saving = false;
 
   @override
   void dispose() {
     _nameController.dispose();
+    _durationController.dispose();
     super.dispose();
   }
 
@@ -34,19 +43,32 @@ class _LogChugSheetState extends ConsumerState<LogChugSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
-    final funnelId = ref.read(connectedDeviceIdProvider) ?? 'unknown';
+    final existing = widget.existing;
+    final durationMs = existing != null
+        ? int.parse(_durationController.text.trim())
+        : widget.durationMs;
+
     final record = ChugRecord(
-      funnelId: funnelId,
+      id: existing?.id,
+      funnelId: existing?.funnelId ??
+          ref.read(connectedDeviceIdProvider) ??
+          'unknown',
       name: _nameController.text.trim(),
       liquid: _liquid,
       quantityMl: _quantityMl,
-      durationMs: widget.durationMs,
-      loggedAt: DateTime.now(), // overwritten by serverTimestamp in toFirestore
+      durationMs: durationMs,
+      loggedAt: existing?.loggedAt ??
+          DateTime
+              .now(), // overwritten by serverTimestamp in toFirestore for new records
     );
 
     try {
-      final service = await ref.read(localStorageServiceProvider.future);
-      await service.saveChug(record);
+      final service = ref.read(firestoreServiceProvider);
+      if (existing != null) {
+        await service.updateChug(record);
+      } else {
+        await service.saveChug(record);
+      }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -61,6 +83,7 @@ class _LogChugSheetState extends ConsumerState<LogChugSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isEditing = widget.isEditing;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -77,9 +100,11 @@ class _LogChugSheetState extends ConsumerState<LogChugSheet> {
           children: [
             Center(
               child: Text(
-                widget.durationMs == 0
-                    ? 'Manual entry'
-                    : 'Chug recorded: ${formatChugDuration(widget.durationMs)}',
+                isEditing
+                    ? 'Edit chug'
+                    : widget.durationMs == 0
+                        ? 'Manual entry'
+                        : 'Chug recorded: ${formatChugDuration(widget.durationMs)}',
                 style: theme.textTheme.titleMedium,
               ),
             ),
@@ -121,6 +146,25 @@ class _LogChugSheetState extends ConsumerState<LogChugSheet> {
                 );
               }).toList(),
             ),
+            if (isEditing) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _durationController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Duration (ms)',
+                  helperText: 'e.g. 3235 = 3.235s',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  final parsed = int.tryParse(v?.trim() ?? '');
+                  if (parsed == null || parsed < 0) {
+                    return 'Enter a whole number of milliseconds';
+                  }
+                  return null;
+                },
+              ),
+            ],
             const SizedBox(height: 24),
             Row(
               children: [
@@ -141,7 +185,7 @@ class _LogChugSheetState extends ConsumerState<LogChugSheet> {
                             width: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Save'),
+                        : Text(isEditing ? 'Update' : 'Save'),
                   ),
                 ),
               ],
@@ -153,12 +197,17 @@ class _LogChugSheetState extends ConsumerState<LogChugSheet> {
   }
 }
 
-/// Shows the log-chug bottom sheet. Call from the leaderboard screen when
-/// pendingChugDurationProvider becomes non-null.
-Future<void> showLogChugSheet(BuildContext context, int durationMs) {
+/// Shows the log-chug bottom sheet. Call with [existing] to edit a record
+/// in place instead of creating a new one. Call from the leaderboard screen
+/// when pendingChugDurationProvider becomes non-null.
+Future<void> showLogChugSheet(
+  BuildContext context,
+  int durationMs, {
+  ChugRecord? existing,
+}) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    builder: (_) => LogChugSheet(durationMs: durationMs),
+    builder: (_) => LogChugSheet(durationMs: durationMs, existing: existing),
   );
 }

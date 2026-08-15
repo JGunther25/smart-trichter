@@ -1,4 +1,4 @@
-package com.example.smart_trichter
+package com.smartfunnel.smart_funnel
 
 import io.flutter.embedding.android.FlutterActivity
 

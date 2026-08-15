@@ -23,15 +23,20 @@ class BleService {
 
   String? get connectedDeviceId => _device?.remoteId.str;
 
+  String? get connectedDeviceName {
+    final name = _device?.platformName;
+    return (name != null && name.isNotEmpty) ? name : null;
+  }
+
   Stream<List<ScanResult>> get scanResults => FlutterBluePlus.scanResults.map(
-    (results) => results
-  //      .where(
-  //        (r) => r.advertisementData.serviceUuids.any(
-  //          (u) => u.str.toUpperCase() == kServiceUuid.toUpperCase(),
- //        ),
- //       )
-        .toList(),
-  );
+        (results) => results
+            //      .where(
+            //        (r) => r.advertisementData.serviceUuids.any(
+            //          (u) => u.str.toUpperCase() == kServiceUuid.toUpperCase(),
+            //        ),
+            //       )
+            .toList(),
+      );
 
   Future<void> startScan() async {
     // Request permissions first
@@ -65,32 +70,34 @@ class BleService {
   Future<void> _subscribeToChugResult(BluetoothDevice device) async {
     final services = await device.discoverServices();
     for (final service in services) {
-    debugPrint('SERVICE: ${service.serviceUuid.str}');
-    for (final char in service.characteristics) {
-      debugPrint('  CHAR: ${char.characteristicUuid.str} | properties: ${char.properties}');
-    }
-    for (final service in services) {
-      if (service.serviceUuid.str.toUpperCase() != kServiceUuid.toUpperCase()) {
-        continue;
-      }
+      debugPrint('SERVICE: ${service.serviceUuid.str}');
       for (final char in service.characteristics) {
-        if (char.characteristicUuid.str.toUpperCase() !=
-            kChugResultCharUuid.toUpperCase()) {
+        debugPrint(
+            '  CHAR: ${char.characteristicUuid.str} | properties: ${char.properties}');
+      }
+      for (final service in services) {
+        if (service.serviceUuid.str.toUpperCase() !=
+            kServiceUuid.toUpperCase()) {
           continue;
         }
-        await char.setNotifyValue(true);
-        _notifySubscription = char.lastValueStream.listen((bytes) {
-          try {
-            final ms = decodeChugDuration(bytes);
-            _chugDurationController.add(ms);
-          } catch (e) {
-            debugPrint('BLE: failed to decode chug payload: $e');
+        for (final char in service.characteristics) {
+          if (char.characteristicUuid.str.toUpperCase() !=
+              kChugResultCharUuid.toUpperCase()) {
+            continue;
           }
-        });
-        return;
+          await char.setNotifyValue(true);
+          _notifySubscription = char.lastValueStream.listen((bytes) {
+            try {
+              final ms = decodeChugDuration(bytes);
+              _chugDurationController.add(ms);
+            } catch (e) {
+              debugPrint('BLE: failed to decode chug payload: $e');
+            }
+          });
+          return;
+        }
       }
-    }
-    debugPrint('BLE: chug-result characteristic not found');
+      debugPrint('BLE: chug-result characteristic not found');
     }
   }
 

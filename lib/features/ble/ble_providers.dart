@@ -17,6 +17,10 @@ final connectedDeviceIdProvider = Provider<String?>((ref) {
   return ref.watch(bleServiceProvider).connectedDeviceId;
 });
 
+final connectedDeviceNameProvider = Provider<String?>((ref) {
+  return ref.watch(bleServiceProvider).connectedDeviceName;
+});
+
 final chugDurationProvider = StreamProvider<int>((ref) {
   return ref.watch(bleServiceProvider).chugDurationStream;
 });

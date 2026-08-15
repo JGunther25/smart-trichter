@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/chug_record.dart';
+import '../../services/service_providers.dart';
 import 'ble_providers.dart';
+import 'ble_service.dart';
+import 'legacy_import_service.dart';
 
 class ConnectScreen extends ConsumerStatefulWidget {
   const ConnectScreen({super.key});
@@ -14,14 +18,73 @@ class ConnectScreen extends ConsumerStatefulWidget {
 class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   bool _isScanning = false;
   bool _isConnecting = false;
+  bool _isImporting = false;
   List<ScanResult> _results = [];
   StreamSubscription? _scanSub;
+  Future<List<ChugRecord>>? _legacyRecords;
+  late final BleService _bleService;
+
+  @override
+  void initState() {
+    super.initState();
+    _legacyRecords = readLegacyRecords();
+    // Cache the service now — ref can become unusable by the time dispose()
+    // runs if the wider widget tree is tearing down at the same time.
+    _bleService = ref.read(bleServiceProvider);
+  }
 
   @override
   void dispose() {
     _scanSub?.cancel();
-    ref.read(bleServiceProvider).stopScan();
+    _bleService.stopScan();
     super.dispose();
+  }
+
+  Future<void> _importLegacyRecords(List<ChugRecord> records) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import local chugs?'),
+        content: Text(
+          'Found ${records.length} chug${records.length == 1 ? '' : 's'} saved '
+          'on this device before Firestore. Copy them to Firestore now?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _isImporting = true);
+    try {
+      final service = ref.read(firestoreServiceProvider);
+      await importLegacyRecords(service, records);
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+          _legacyRecords = Future.value(const []);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Imported ${records.length} chugs to Firestore')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isImporting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _startScan() async {
@@ -106,6 +169,30 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                         );
                       },
                     ),
+            ),
+            FutureBuilder<List<ChugRecord>>(
+              future: _legacyRecords,
+              builder: (context, snapshot) {
+                final records = snapshot.data ?? const [];
+                if (records.isEmpty) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: OutlinedButton.icon(
+                    onPressed: _isImporting
+                        ? null
+                        : () => _importLegacyRecords(records),
+                    icon: _isImporting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_upload),
+                    label: Text(
+                        'Import ${records.length} local chugs to Firestore'),
+                  ),
+                );
+              },
             ),
             TextButton(
               onPressed: () => context.go('/leaderboard'),

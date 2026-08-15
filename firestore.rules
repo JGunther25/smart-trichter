@@ -1,0 +1,21 @@
+// Deploy with: firebase deploy --only firestore:rules
+// Or via Firebase Console > Firestore > Rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /chugs/{chugId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasAll(
+          ['funnelId', 'name', 'liquid', 'quantityMl', 'durationMs', 'loggedAt'])
+        && request.resource.data.funnelId is string
+        && request.resource.data.name is string
+        && request.resource.data.liquid is string
+        && request.resource.data.quantityMl is int
+        && request.resource.data.durationMs is int;
+      // No auth in this app, so edit/delete is open to anyone with the
+      // client config — an intentional tradeoff for a hobby/party app.
+      allow delete: if true;
+    }
+  }
+}

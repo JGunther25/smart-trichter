@@ -1,7 +1,7 @@
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_trichter/models/chug_record.dart';
-import 'package:smart_trichter/services/local_storage_service.dart';
+import 'package:smart_trichter/services/firestore_service.dart';
 
 ChugRecord _record({
   String funnelId = 'funnel-1',
@@ -21,15 +21,14 @@ ChugRecord _record({
     );
 
 void main() {
-  group('LocalStorageService', () {
-    late LocalStorageService service;
+  group('FirestoreService', () {
+    late FakeFirebaseFirestore fakeFirestore;
+    late FirestoreService service;
 
-    setUp(() async {
-      SharedPreferences.setMockInitialValues({});
-      service = await LocalStorageService.create();
+    setUp(() {
+      fakeFirestore = FakeFirebaseFirestore();
+      service = FirestoreService(db: fakeFirestore);
     });
-
-    tearDown(() => service.dispose());
 
     test('saveChug then watchLeaderboard returns the saved record', () async {
       final record = _record(durationMs: 4200);
@@ -108,42 +107,84 @@ void main() {
       expect(results.first.id, isNotEmpty);
     });
 
-    test('watchHistory orders by loggedAt descending', () async {
-      final now = DateTime.now();
-      await service.saveChug(_record(
-          name: 'A', loggedAt: now.subtract(const Duration(minutes: 2))));
-      await service.saveChug(_record(name: 'B', loggedAt: now));
-      await service.saveChug(_record(
-          name: 'C', loggedAt: now.subtract(const Duration(minutes: 1))));
+    test('saveAll writes every record in one batch', () async {
+      await service.saveAll([
+        _record(name: 'A', durationMs: 1000),
+        _record(name: 'B', durationMs: 2000),
+      ]);
 
-      final results = await service.watchHistory(funnelId: 'funnel-1').first;
+      final results = await service.watchAllLeaderboard().first;
 
-      expect(results.map((r) => r.name).toList(), ['B', 'C', 'A']);
+      expect(results, hasLength(2));
+      expect(results.map((r) => r.name).toSet(), {'A', 'B'});
     });
 
-    test('watchHistory date filter returns only records on that day', () async {
-      final today = DateTime.now();
-      final yesterday = today.subtract(const Duration(days: 1));
-      await service.saveChug(_record(name: 'Today', loggedAt: today));
-      await service.saveChug(_record(name: 'Yesterday', loggedAt: yesterday));
+    test('saveAll with preserveLoggedAt keeps original timestamps', () async {
+      final loggedAt = DateTime(2024, 1, 1, 10, 30);
+      await service.saveAll(
+        [_record(loggedAt: loggedAt)],
+        preserveLoggedAt: true,
+      );
 
-      final results =
-          await service.watchHistory(funnelId: 'funnel-1', date: today).first;
+      final results = await service.watchAllLeaderboard().first;
 
-      expect(results, hasLength(1));
-      expect(results.first.name, 'Today');
+      expect(results.first.loggedAt, loggedAt);
     });
 
-    test('watchHistory liquid filter works', () async {
-      await service.saveChug(_record(liquid: 'Beer'));
-      await service.saveChug(_record(liquid: 'Wine'));
+    test('updateChug overwrites the editable fields', () async {
+      await service.saveChug(_record(name: 'Alice', durationMs: 4000));
+      final saved = await service.watchAllLeaderboard().first;
 
-      final results = await service
-          .watchHistory(funnelId: 'funnel-1', liquid: 'Wine')
-          .first;
+      await service.updateChug(
+        ChugRecord(
+          id: saved.first.id,
+          funnelId: saved.first.funnelId,
+          name: 'Alice Updated',
+          liquid: 'Wine',
+          quantityMl: 250,
+          durationMs: 2500,
+          loggedAt: saved.first.loggedAt,
+        ),
+      );
 
+      final results = await service.watchAllLeaderboard().first;
       expect(results, hasLength(1));
+      expect(results.first.name, 'Alice Updated');
       expect(results.first.liquid, 'Wine');
+      expect(results.first.quantityMl, 250);
+      expect(results.first.durationMs, 2500);
+    });
+
+    test('updateChug preserves the original loggedAt', () async {
+      final loggedAt = DateTime(2024, 3, 1, 8, 0);
+      await service
+          .saveAll([_record(loggedAt: loggedAt)], preserveLoggedAt: true);
+      final saved = await service.watchAllLeaderboard().first;
+
+      await service.updateChug(
+        ChugRecord(
+          id: saved.first.id,
+          funnelId: saved.first.funnelId,
+          name: saved.first.name,
+          liquid: saved.first.liquid,
+          quantityMl: saved.first.quantityMl,
+          durationMs: 9999,
+          loggedAt: saved.first.loggedAt,
+        ),
+      );
+
+      final results = await service.watchAllLeaderboard().first;
+      expect(results.first.loggedAt, loggedAt);
+    });
+
+    test('deleteChug removes the record', () async {
+      await service.saveChug(_record());
+      final saved = await service.watchAllLeaderboard().first;
+
+      await service.deleteChug(saved.first.id!);
+
+      final results = await service.watchAllLeaderboard().first;
+      expect(results, isEmpty);
     });
   });
 }

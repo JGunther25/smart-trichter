@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../models/chug_record.dart';
 import '../../models/liquid_option.dart';
+import '../../services/service_providers.dart';
+import '../../utils/date_format.dart';
 import '../../utils/duration_format.dart';
 import '../ble/ble_providers.dart';
 import '../log_chug/log_chug_providers.dart';
@@ -14,6 +17,7 @@ class LeaderboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final connectedName = ref.watch(connectedDeviceNameProvider);
     final connectedId = ref.watch(connectedDeviceIdProvider);
 
     ref.listen<int?>(pendingChugDurationProvider, (_, durationMs) async {
@@ -27,13 +31,8 @@ class LeaderboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(connectedId ?? 'Smart Funnel'),
+        title: Text(connectedName ?? connectedId ?? 'Smart Funnel'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: 'History',
-            onPressed: () => context.push('/history'),
-          ),
           IconButton(
             icon: const Icon(Icons.bluetooth),
             tooltip: 'Connect funnel',
@@ -168,12 +167,45 @@ class _LeaderboardList extends ConsumerWidget {
             return ListTile(
               leading: rankWidget,
               title: Text(record.name),
-              subtitle: Text('${record.liquid} · ${record.quantityMl} ml'),
-              trailing: Text(
-                formatChugDuration(record.durationMs),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+              subtitle: Text(
+                '${record.liquid} · ${record.quantityMl} ml · '
+                '${formatChugTimestamp(record.loggedAt)}',
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    formatChugDuration(record.durationMs),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  PopupMenuButton<_RowAction>(
+                    icon: const Icon(Icons.more_vert),
+                    onSelected: (action) {
+                      switch (action) {
+                        case _RowAction.edit:
+                          showLogChugSheet(
+                            context,
+                            record.durationMs,
+                            existing: record,
+                          );
+                        case _RowAction.delete:
+                          _confirmDelete(context, ref, record);
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: _RowAction.edit,
+                        child: Text('Edit'),
+                      ),
+                      PopupMenuItem(
+                        value: _RowAction.delete,
+                        child: Text('Delete'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             );
           },
@@ -181,4 +213,41 @@ class _LeaderboardList extends ConsumerWidget {
       },
     );
   }
+}
+
+enum _RowAction { edit, delete }
+
+Future<void> _confirmDelete(
+  BuildContext context,
+  WidgetRef ref,
+  ChugRecord record,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Delete entry?'),
+      content: Text(
+        "Remove ${record.name}'s ${formatChugDuration(record.durationMs)} "
+        '${record.liquid} chug? This can\'t be undone.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+            foregroundColor: Theme.of(context).colorScheme.onError,
+          ),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || record.id == null) return;
+
+  final service = ref.read(firestoreServiceProvider);
+  await service.deleteChug(record.id!);
 }
