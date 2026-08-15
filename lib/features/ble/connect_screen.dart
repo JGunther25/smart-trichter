@@ -156,7 +156,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: () => context.go('/funnels'),
+              onPressed: () => context.push('/funnels'),
               icon: const Icon(Icons.leaderboard),
               label: const Text('Browse a funnel\'s leaderboard'),
             ),

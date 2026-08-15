@@ -44,7 +44,7 @@ class LeaderboardScreen extends ConsumerWidget {
             IconButton(
               icon: const Icon(Icons.swap_horiz),
               tooltip: 'Change funnel',
-              onPressed: () => context.go('/funnels'),
+              onPressed: () => context.push('/funnels'),
             ),
           IconButton(
             icon: const Icon(Icons.bluetooth),
