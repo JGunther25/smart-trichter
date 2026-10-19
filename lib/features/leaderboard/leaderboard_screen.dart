@@ -180,11 +180,18 @@ class _FilterRow extends ConsumerWidget {
   }
 }
 
-class _LeaderboardList extends ConsumerWidget {
+class _LeaderboardList extends ConsumerStatefulWidget {
   const _LeaderboardList();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_LeaderboardList> createState() => _LeaderboardListState();
+}
+
+class _LeaderboardListState extends ConsumerState<_LeaderboardList> {
+  TimeDisplayMode _timeMode = TimeDisplayMode.overall;
+
+  @override
+  Widget build(BuildContext context) {
     final records = ref.watch(filteredLeaderboardProvider);
     final hasSearch = ref.watch(searchQueryProvider).trim().isNotEmpty;
 
@@ -214,6 +221,7 @@ class _LeaderboardList extends ConsumerWidget {
             ),
           );
         }
+        final durations = [for (final r in rows) r.durationMs];
         return ListView.builder(
           itemCount: rows.length,
           itemBuilder: (context, i) {
@@ -243,10 +251,20 @@ class _LeaderboardList extends ConsumerWidget {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    formatChugDuration(record.durationMs),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => setState(() => _timeMode = _timeMode.next),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        formatLeaderboardTime(durations, i, _timeMode),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
                     ),
                   ),
                   PopupMenuButton<_RowAction>(

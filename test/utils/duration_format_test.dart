@@ -28,4 +28,42 @@ void main() {
       expect(formatChugDuration(0), '0.000s');
     });
   });
+
+  group('formatLeaderboardTime', () {
+    const durations = [3500, 3700, 4200];
+
+    List<String> all(TimeDisplayMode mode) => [
+          for (var i = 0; i < durations.length; i++)
+            formatLeaderboardTime(durations, i, mode),
+        ];
+
+    test('overall shows full times', () {
+      expect(all(TimeDisplayMode.overall), ['3.500s', '3.700s', '4.200s']);
+    });
+
+    test('gap to leader is relative to first place', () {
+      expect(all(TimeDisplayMode.gapToLeader), ['3.500s', '+0.200', '+0.700']);
+    });
+
+    test('interval is relative to the row above', () {
+      expect(all(TimeDisplayMode.interval), ['3.500s', '+0.200', '+0.500']);
+    });
+
+    test('ties show +0.000', () {
+      expect(
+        formatLeaderboardTime([3500, 3500], 1, TimeDisplayMode.interval),
+        '+0.000',
+      );
+    });
+
+    test('gaps over a minute keep the m:ss format', () {
+      expect(formatChugGap(62400), '+1:02.400');
+    });
+
+    test('mode cycles overall -> gap -> interval -> overall', () {
+      expect(TimeDisplayMode.overall.next, TimeDisplayMode.gapToLeader);
+      expect(TimeDisplayMode.gapToLeader.next, TimeDisplayMode.interval);
+      expect(TimeDisplayMode.interval.next, TimeDisplayMode.overall);
+    });
+  });
 }
