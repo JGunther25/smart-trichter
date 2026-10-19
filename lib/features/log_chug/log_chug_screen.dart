@@ -48,8 +48,7 @@ class _LogChugSheetState extends ConsumerState<LogChugSheet> {
   );
 
   late String _liquid = widget.existing?.liquid ?? liquidOptions.first;
-  late int _quantityMl =
-      widget.existing?.quantityMl ?? (widget.isManualEntry ? 500 : 330);
+  late int _quantityMl = widget.existing?.quantityMl ?? 500;
   bool _saving = false;
 
   @override
